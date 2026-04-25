@@ -1,0 +1,11 @@
+# FANET AI-Native Multicast Routing
+# GNN + Deep Hierarchical Reinforcement Learning
+
+torch>=2.0.0
+numpy>=1.24.0
+networkx>=3.0
+matplotlib>=3.7.0
+
+# Optional — uncomment if using PyTorch Geometric or TensorBoard
+# torch-geometric>=2.3.0
+# tensorboard>=2.13.0
