@@ -11,7 +11,6 @@ Orchestrates episode-based training:
 """
 
 import os
-import time
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -41,6 +40,8 @@ class Trainer:
         env_cfg = {
             "num_nodes": cfg.get("num_nodes", 50),
             "max_steps": self.max_steps,
+            "comm_range": cfg.get("comm_range", 250.0),
+            "max_speed": cfg.get("max_speed", 15.0),
         }
         self.env = FANETEnv(config=env_cfg)
 
@@ -65,6 +66,7 @@ class Trainer:
             max_neighbors=cfg.get("max_neighbors", 20),
             lr=cfg.get("intrinsic_lr", 1e-3),
             gamma=cfg.get("gamma", 0.99),
+            max_hops=cfg.get("max_hops", 15),
         )
 
         # Routing engine (ties everything together)
@@ -149,8 +151,11 @@ class Trainer:
             meta_next_state = self.meta.build_state(
                 next_embeddings, self.env.source, self.env.destinations
             )
-            # Use action index 0 as a simplification (relay selection is multi-select)
-            self.meta.store_transition(meta_state, 0, reward, meta_next_state, done)
+            # CRITICAL FIX #3: Store actual relay selection as action index (0-max_relays)
+            relay_nodes = action.get("relay_nodes", [])
+            # Use the number of relays as the action (how many relays were selected)
+            relay_action_idx = min(len(relay_nodes), self.meta.max_relays - 1)
+            self.meta.store_transition(meta_state, relay_action_idx, reward, meta_next_state, done)
             meta_loss = self.meta.learn()
             if meta_loss:
                 self.meta_loss_history.append(meta_loss)

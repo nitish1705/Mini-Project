@@ -80,6 +80,8 @@ class RoutingEngine:
         all_transitions: List[Tuple] = []
 
         for dest in destinations:
+            # Build path from source to destination
+            # The intrinsic controller learns to find good paths
             path, transitions = self.intrinsic.build_path(
                 embeddings, source, dest, adjacency
             )

@@ -101,7 +101,7 @@ class FANETEnv:
 
         for dest, path in paths.items():
             self.packets_sent += 1
-            delivered, delay, energy = self._simulate_packet(path)
+            delivered, delay, energy = self._simulate_packet(path, dest)
             if delivered:
                 self.packets_received += 1
                 step_delivered += 1
@@ -133,10 +133,11 @@ class FANETEnv:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _simulate_packet(self, path: List[int]) -> Tuple[bool, float, float]:
+    def _simulate_packet(self, path: List[int], destination: int) -> Tuple[bool, float, float]:
         """
         Simulate forwarding a packet along *path*.
         Returns (delivered, delay, energy_consumed).
+        Only counts as delivered if path[-1] == destination (CRITICAL FIX).
         """
         delay = 0.0
         energy = 0.0
@@ -164,6 +165,9 @@ class FANETEnv:
             delay += hop_delay
             energy += src_node._energy_tx_cost + dst_node._energy_rx_cost
 
+        # CRITICAL FIX #1: Verify packet actually reached the intended destination
+        if not path or path[-1] != destination:
+            return False, delay, energy  # Didn't reach destination!
         return True, delay, energy
 
     def _compute_reward(
@@ -195,7 +199,7 @@ class FANETEnv:
         """Build current observation dict."""
         graph = self.graph_builder.build(self.swarm)
         node_features = self.graph_builder.get_node_feature_matrix(self.swarm, graph)
-        adj = self.graph_builder.get_adjacency_matrix(graph)
+        adj = self.graph_builder.get_adjacency_matrix(graph, total_nodes=self.num_nodes)
         edge_attrs = self.graph_builder.get_edge_attr_matrix(graph)
 
         return {

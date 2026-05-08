@@ -99,10 +99,38 @@ class GraphBuilder:
 
         return features
 
-    def get_adjacency_matrix(self, graph: nx.Graph) -> np.ndarray:
-        """Return dense adjacency matrix for the graph.  Shape (N, N)."""
+    def get_adjacency_matrix(
+        self,
+        graph: nx.Graph,
+        total_nodes: Optional[int] = None,
+    ) -> np.ndarray:
+        """Return dense adjacency matrix for the graph aligned to node ids.
+
+        Produces an (N, N) matrix where N = max_node_id + 1. Nodes that are
+        not present in the graph (e.g., dead nodes) have zero rows/columns.
+        This keeps the adjacency matrix aligned with the full node feature
+        matrix produced by `get_node_feature_matrix` which indexes by
+        `node.node_id`.
+        """
         node_list = sorted(graph.nodes)
-        A = nx.to_numpy_array(graph, nodelist=node_list, dtype=np.float32)
+        if total_nodes is not None:
+            N = max(0, int(total_nodes))
+        elif node_list:
+            # Determine full size from live graph ids (assumes integer ids)
+            N = int(max(node_list)) + 1
+        else:
+            return np.zeros((0, 0), dtype=np.float32)
+
+        # Safety: never allocate smaller than highest node id present in graph.
+        if node_list:
+            N = max(N, int(max(node_list)) + 1)
+
+        A = np.zeros((N, N), dtype=np.float32)
+
+        for u, v, data in graph.edges(data=True):
+            A[int(u), int(v)] = 1.0
+            A[int(v), int(u)] = 1.0
+
         return A
 
     def get_edge_attr_matrix(self, graph: nx.Graph) -> Dict[Tuple[int, int], np.ndarray]:

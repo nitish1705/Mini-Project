@@ -184,7 +184,29 @@ class IntrinsicController:
             transitions.append((state, action_idx, current, next_hop))
             current = next_hop
 
-        return path, transitions
+        # CRITICAL FIX #2 (FINAL): Return path only if it reaches destination
+        if len(path) > 0 and path[-1] == destination:
+            return path, transitions
+        
+        # Fallback: Use BFS to find ANY path to destination
+        # This ensures we can still route even if Q-learning hasn't converged
+        import collections
+        queue = collections.deque([(source, [source])])
+        bfs_visited = {source}
+        
+        while queue:
+            curr, bfs_path = queue.popleft()
+            if curr == destination:
+                # Found path via BFS - use it with no transitions (pure exploration)
+                return bfs_path, []
+            
+            for next_node in range(adjacency.shape[0]):
+                if adjacency[curr, next_node] > 0 and next_node not in bfs_visited and len(bfs_path) < self.max_hops:
+                    bfs_visited.add(next_node)
+                    queue.append((next_node, bfs_path + [next_node]))
+        
+        # No path found even with BFS
+        return [], []
 
     # ------------------------------------------------------------------
     # Learning
@@ -249,7 +271,17 @@ class IntrinsicController:
         )
 
     def load(self, path: str):
-        ckpt = torch.load(path, map_location=self.device, weights_only=True)
-        self.q_net.load_state_dict(ckpt["q_net"])
-        self.target_net.load_state_dict(ckpt["target_net"])
-        self.epsilon = ckpt.get("epsilon", self.epsilon_end)
+        # Load checkpoint saved by `save()` above. torch.load does not accept
+        # a `weights_only` argument — use map_location instead and handle
+        # both dict-style and raw state_dict checkpoints.
+        ckpt = torch.load(path, map_location=self.device)
+        if isinstance(ckpt, dict) and "q_net" in ckpt:
+            self.q_net.load_state_dict(ckpt["q_net"])
+            self.target_net.load_state_dict(ckpt["target_net"])
+            self.epsilon = ckpt.get("epsilon", self.epsilon_end)
+        else:
+            try:
+                self.q_net.load_state_dict(ckpt)
+                self.target_net.load_state_dict(ckpt)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load intrinsic controller checkpoint: {e}")

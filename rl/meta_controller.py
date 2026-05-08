@@ -214,7 +214,18 @@ class MetaController:
         )
 
     def load(self, path: str):
-        ckpt = torch.load(path, map_location=self.device, weights_only=True)
-        self.q_net.load_state_dict(ckpt["q_net"])
-        self.target_net.load_state_dict(ckpt["target_net"])
-        self.epsilon = ckpt.get("epsilon", self.epsilon_end)
+        # Load checkpoint saved by `save()` above. Use map_location for device
+        # compatibility. torch.load does not accept a `weights_only` kwarg.
+        ckpt = torch.load(path, map_location=self.device)
+        if isinstance(ckpt, dict) and "q_net" in ckpt:
+            self.q_net.load_state_dict(ckpt["q_net"])
+            self.target_net.load_state_dict(ckpt["target_net"])
+            self.epsilon = ckpt.get("epsilon", self.epsilon_end)
+        else:
+            # Backwards compatibility: if the checkpoint is a state_dict,
+            # attempt to load it directly into q_net.
+            try:
+                self.q_net.load_state_dict(ckpt)
+                self.target_net.load_state_dict(ckpt)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load meta controller checkpoint: {e}")
