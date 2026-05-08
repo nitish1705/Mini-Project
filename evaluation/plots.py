@@ -148,6 +148,50 @@ def plot_network_lifetime(
     print(f"  Saved: {save_path}")
 
 
+def plot_energy_longevity(
+    results: Dict[str, List[float]],
+    save_path: str = "results/energy_longevity.png",
+):
+    """Plots the minimum residual energy in the swarm (higher is better)."""
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for method, values in results.items():
+        ax.plot(values, label=method, linewidth=2)
+
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Min Residual Energy (%)")
+    ax.set_title("Network Longevity (Load Balancing)")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {save_path}")
+
+
+def plot_energy_efficiency(
+    results: Dict[str, List[float]],
+    save_path: str = "results/energy_efficiency.png",
+):
+    """Plots energy consumed per delivered packet (lower is better)."""
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for method, values in results.items():
+        ax.plot(values, label=method, linewidth=2)
+
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Energy per Packet")
+    ax.set_title("Energy Efficiency")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {save_path}")
+
+
 def plot_loss_curves(
     meta_losses: List[float],
     intrinsic_losses: List[float],
@@ -210,6 +254,22 @@ def generate_all_plots(
         energy_data["AODV"] = baseline_history["energy"]
     plot_energy_consumption(
         energy_data, save_path=os.path.join(save_dir, "energy_consumption.png")
+    )
+    
+    # 4b. Energy efficiency
+    eff_data = {"GNN+HRL": history.get("energy_efficiency", [])}
+    if baseline_history and "energy_efficiency" in baseline_history:
+        eff_data["AODV"] = baseline_history["energy_efficiency"]
+    plot_energy_efficiency(
+        eff_data, save_path=os.path.join(save_dir, "energy_efficiency.png")
+    )
+    
+    # 4c. Energy longevity
+    long_data = {"GNN+HRL": history.get("min_residual_energy", [])}
+    if baseline_history and "min_residual_energy" in baseline_history:
+        long_data["AODV"] = baseline_history["min_residual_energy"]
+    plot_energy_longevity(
+        long_data, save_path=os.path.join(save_dir, "energy_longevity.png")
     )
 
     # 5. Loss curves

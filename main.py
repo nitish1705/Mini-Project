@@ -66,6 +66,7 @@ def run_aodv_baseline(config: dict) -> Dict[str, List[float]]:
     collector = MetricsCollector()
 
     pdr_list, delay_list, energy_list = [], [], []
+    eff_list, long_list = [], []
     num_episodes = config.get("num_episodes", 100)
 
     print("\n--- Running AODV Baseline ---")
@@ -80,20 +81,27 @@ def run_aodv_baseline(config: dict) -> Dict[str, List[float]]:
             if done:
                 break
 
-        metrics = env.get_metrics()
         collector.record(info)
-        pdr_list.append(metrics["pdr"])
-        delay_list.append(metrics["avg_delay"])
-        energy_list.append(metrics["avg_energy_consumption"])
+        pdr_list.append(info["pdr"])
+        delay_list.append(info["avg_delay"])
+        energy_list.append(info["energy_used"])
+        eff_list.append(info["energy_efficiency"])
+        long_list.append(info["min_residual_energy"])
 
         if ep % 50 == 0:
-            print(f"  AODV episode {ep:>4d} | PDR {metrics['pdr']:.3f}")
+            print(f"  AODV episode {ep:>4d} | PDR {info['pdr']:.3f}")
 
     summary = collector.summary()
     print(f"  AODV Summary → PDR: {summary.get('pdr', 0):.3f}, "
           f"Delay: {summary.get('avg_delay', 0):.4f}")
 
-    return {"pdr": pdr_list, "delay": delay_list, "energy": energy_list}
+    return {
+        "pdr": pdr_list, 
+        "delay": delay_list, 
+        "energy": energy_list,
+        "energy_efficiency": eff_list,
+        "min_residual_energy": long_list
+    }
 
 
 def _checkpoint_episode_from_name(filename: str, prefix: str) -> Optional[int]:
@@ -217,6 +225,7 @@ def run_saved_model_inference(
 
     collector = MetricsCollector()
     reward_list, pdr_list, delay_list, energy_list = [], [], [], []
+    eff_list, long_list = [], []
 
     num_episodes = config.get("num_episodes", 100)
     print("\n--- Running Saved-Model Inference ---")
@@ -228,7 +237,7 @@ def run_saved_model_inference(
         ep_reward = 0.0
 
         for _ in range(config.get("max_steps", 100)):
-            action, _, _ = router.compute_action(
+            action, _, _, _ = router.compute_action(
                 obs,
                 source=env.source,
                 destinations=env.destinations,
@@ -238,15 +247,16 @@ def run_saved_model_inference(
             if done:
                 break
 
-        metrics = env.get_metrics()
         collector.record(info)
         reward_list.append(ep_reward)
-        pdr_list.append(metrics["pdr"])
-        delay_list.append(metrics["avg_delay"])
-        energy_list.append(metrics["avg_energy_consumption"])
+        pdr_list.append(info["pdr"])
+        delay_list.append(info["avg_delay"])
+        energy_list.append(info["energy_used"])
+        eff_list.append(info["energy_efficiency"])
+        long_list.append(info["min_residual_energy"])
 
         if ep % 50 == 0:
-            print(f"  Inference episode {ep:>4d} | PDR {metrics['pdr']:.3f}")
+            print(f"  Inference episode {ep:>4d} | PDR {info['pdr']:.3f}")
 
     summary = collector.summary()
     print(
@@ -260,6 +270,8 @@ def run_saved_model_inference(
         "pdr": pdr_list,
         "delay": delay_list,
         "energy": energy_list,
+        "energy_efficiency": eff_list,
+        "min_residual_energy": long_list,
     }
 
 
@@ -313,7 +325,7 @@ def parse_args():
     p.add_argument(
         "--max_hops",
         type=int,
-        default=15,
+        default=20,
         help="Maximum routing hops for intrinsic controller",
     )
     p.add_argument("--seed", type=int, default=42, help="Random seed")

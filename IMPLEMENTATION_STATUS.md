@@ -51,8 +51,9 @@ are kept as future extensions.
 | 8D node features          | Implemented                     | Matches paper feature shape                       |
 | 4D edge/link features     | Implemented as graph attributes | Available for routing/future edge-aware GNN       |
 | 2-layer GCN-style encoder | Implemented                     | 8 -> 32 -> 16 embedding                           |
-| Meta Controller           | Implemented                     | Strategic relay candidate module                  |
-| Intrinsic Controller      | Implemented                     | Hop-by-hop path module                            |
+| Meta Controller           | Implemented                     | Picks primary relay waypoint (Strongly Coupled)   |
+| Intrinsic Controller      | Implemented                     | Routes through Meta waypoint (Hierarchical)       |
+| Centralized Information   | Implemented                     | Intrinsic state includes global graph embedding   |
 | Replay buffers            | Implemented                     | 10k Meta, 20k Intrinsic                           |
 | Reward function           | Implemented                     | Delivery, delay, energy, alive-ratio              |
 | Destination validation    | Fixed                           | PDR is now based on reaching intended destination |
@@ -111,15 +112,16 @@ The current version performs application-layer multicast path construction.
 Shared multicast tree optimization is a future enhancement.
 ```
 
-### 5. Meta Controller Is Present but Still Lightly Coupled
+### 5. Meta Controller Is Now Strongly Coupled
 
-The Meta Controller selects relay candidates, but route construction is still mainly handled by the Intrinsic Controller and BFS fallback.
+The Meta Controller selects a primary relay waypoint, and the Intrinsic Controller builds paths (Source -> Relay -> Destination) to enforce the hierarchy.
 
 Review wording:
 
 ```text
-The hierarchy is implemented as modular Meta and Intrinsic controllers. The
-next improvement is stronger relay-constrained path generation.
+The hierarchy is implemented as strongly coupled Meta and Intrinsic controllers.
+The Meta Controller selects strategic waypoints, and the Intrinsic Controller
+realizes the hop-by-hop path through those waypoints.
 ```
 
 ### 6. Ablation Study Is Not Yet Formal

@@ -81,6 +81,8 @@ class Trainer:
         self.pdr_history: List[float] = []
         self.delay_history: List[float] = []
         self.energy_history: List[float] = []
+        self.eff_history: List[float] = []
+        self.long_history: List[float] = []
         self.meta_loss_history: List[float] = []
         self.intrinsic_loss_history: List[float] = []
 
@@ -100,6 +102,8 @@ class Trainer:
             self.pdr_history.append(ep_info.get("pdr", 0.0))
             self.delay_history.append(ep_info.get("avg_delay", 0.0))
             self.energy_history.append(ep_info.get("energy_used", 0.0))
+            self.eff_history.append(ep_info.get("energy_efficiency", 0.0))
+            self.long_history.append(ep_info.get("min_residual_energy", 0.0))
 
             if episode % self.log_interval == 0:
                 avg_r = np.mean(self.reward_history[-self.log_interval:])
@@ -131,7 +135,7 @@ class Trainer:
 
         for step in range(self.max_steps):
             # Build routing action via the engine
-            action, meta_state, intrinsic_transitions = (
+            action, meta_state, meta_action_idx, intrinsic_transitions = (
                 self.router.compute_action(
                     obs,
                     source=self.env.source,
@@ -151,11 +155,9 @@ class Trainer:
             meta_next_state = self.meta.build_state(
                 next_embeddings, self.env.source, self.env.destinations
             )
-            # CRITICAL FIX #3: Store actual relay selection as action index (0-max_relays)
-            relay_nodes = action.get("relay_nodes", [])
-            # Use the number of relays as the action (how many relays were selected)
-            relay_action_idx = min(len(relay_nodes), self.meta.max_relays - 1)
-            self.meta.store_transition(meta_state, relay_action_idx, reward, meta_next_state, done)
+            
+            # Store the actual index chosen by the meta controller
+            self.meta.store_transition(meta_state, meta_action_idx, reward, meta_next_state, done)
             meta_loss = self.meta.learn()
             if meta_loss:
                 self.meta_loss_history.append(meta_loss)
@@ -208,6 +210,8 @@ class Trainer:
             "pdr": self.pdr_history,
             "delay": self.delay_history,
             "energy": self.energy_history,
+            "energy_efficiency": self.eff_history,
+            "min_residual_energy": self.long_history,
             "meta_loss": self.meta_loss_history,
             "intrinsic_loss": self.intrinsic_loss_history,
         }

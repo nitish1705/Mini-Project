@@ -120,12 +120,22 @@ class FANETEnv:
         reward = self._compute_reward(step_delivered, step_delay, step_energy, len(paths))
 
         obs = self._get_obs()
+        
+        # Calculate energy balance metrics
+        energies = [n.residual_energy for n in self.swarm.nodes]
+        min_energy = min(energies)
+        avg_energy = sum(energies) / self.num_nodes
+        
         info = {
             "packets_sent": self.packets_sent,
             "packets_received": self.packets_received,
             "pdr": self.packets_received / max(1, self.packets_sent),
             "avg_delay": self.total_delay / max(1, self.packets_received),
             "energy_used": self.total_energy_used,
+            "energy_efficiency": self.total_energy_used / max(1, self.packets_received),
+            "min_residual_energy": min_energy,
+            "avg_residual_energy": avg_energy,
+            "alive_nodes": self.swarm.num_alive,
         }
         return obs, reward, done, info
 
@@ -154,8 +164,9 @@ class FANETEnv:
                 return False, delay, energy  # link broken
 
             # Simple propagation model
-            hop_delay = 0.001 + dist / 3e8 + random.uniform(0, 0.005)  # seconds
-            loss_prob = min(0.5, (dist / self.comm_range) ** 2 * 0.3)
+            hop_delay = 0.001 + dist / 3e8 + random.uniform(0, 0.002)  # seconds
+            # More reliable links (simulating MAC-layer retransmissions)
+            loss_prob = min(0.1, (dist / self.comm_range) ** 4 * 0.05)
 
             if random.random() < loss_prob:
                 return False, delay + hop_delay, energy
@@ -177,11 +188,11 @@ class FANETEnv:
             return 0.0
 
         reward = 0.0
-        # Delivery bonus
-        reward += 10.0 * delivered
+        # SIGNIFICANT Delivery bonus to prioritize PDR
+        reward += 50.0 * delivered
 
         # Penalty for undelivered
-        reward -= 5.0 * (num_paths - delivered)
+        reward -= 10.0 * (num_paths - delivered)
 
         # Latency penalty
         reward -= 2.0 * delay
@@ -191,7 +202,7 @@ class FANETEnv:
 
         # Bonus for keeping nodes alive
         alive_ratio = self.swarm.num_alive / self.num_nodes
-        reward += 2.0 * alive_ratio
+        reward += 5.0 * alive_ratio
 
         return reward
 

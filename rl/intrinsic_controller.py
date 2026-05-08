@@ -72,8 +72,8 @@ class IntrinsicController:
         self.max_hops = max_hops
         self.device = device or torch.device("cpu")
 
-        # State = [current_emb | dest_emb | neighbor_summary] → 3 * embed_dim
-        state_dim = 3 * embed_dim
+        # State = [current_emb | dest_emb | neighbor_summary | global_summary] → 4 * embed_dim
+        state_dim = 4 * embed_dim
         action_dim = max_neighbors
 
         self.q_net = IntrinsicQNetwork(state_dim, action_dim).to(self.device)
@@ -104,7 +104,9 @@ class IntrinsicController:
         else:
             neigh_mean = np.zeros(self.embed_dim, dtype=np.float32)
 
-        state = np.concatenate([cur_emb, dest_emb, neigh_mean])
+        global_mean = embeddings.mean(axis=0)
+
+        state = np.concatenate([cur_emb, dest_emb, neigh_mean, global_mean])
         return state.astype(np.float32)
 
     # ------------------------------------------------------------------
@@ -161,11 +163,11 @@ class IntrinsicController:
                 break
 
             # Neighbours of current node
-            neighbors = [
+            neighbors = sorted([
                 j
                 for j in range(adjacency.shape[0])
                 if adjacency[current, j] > 0 and j not in visited
-            ]
+            ])
 
             if len(neighbors) == 0:
                 break
@@ -197,8 +199,21 @@ class IntrinsicController:
         while queue:
             curr, bfs_path = queue.popleft()
             if curr == destination:
-                # Found path via BFS - use it with no transitions (pure exploration)
-                return bfs_path, []
+                # Found path via BFS - generate transitions for learning!
+                bfs_transitions = []
+                for i in range(len(bfs_path) - 1):
+                    c = bfs_path[i]
+                    n = bfs_path[i+1]
+                    # Get neighbors for state construction
+                    all_neighs = [j for j in range(adjacency.shape[0]) if adjacency[c, j] > 0]
+                    # AI only sees first max_neighbors
+                    effective_neighs = all_neighs[:self.max_neighbors]
+                    
+                    if n in effective_neighs:
+                        s = self.build_state(embeddings, c, destination, effective_neighs)
+                        a_idx = effective_neighs.index(n)
+                        bfs_transitions.append((s, a_idx, c, n))
+                return bfs_path, bfs_transitions
             
             for next_node in range(adjacency.shape[0]):
                 if adjacency[curr, next_node] > 0 and next_node not in bfs_visited and len(bfs_path) < self.max_hops:

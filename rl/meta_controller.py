@@ -121,31 +121,39 @@ class MetaController:
         self,
         state: np.ndarray,
         candidate_ids: List[int],
-        num_relays: int = 3,
-    ) -> List[int]:
+        num_relays: int = 1,
+    ) -> Tuple[List[int], int]:
         """
         Select relay nodes from the candidate list.
 
-        Uses ε-greedy exploration.
+        Returns:
+            relay_nodes: list of selected node IDs
+            action_idx: the index chosen by the Q-network (for training)
         """
         if len(candidate_ids) == 0:
-            return []
+            return [], 0
 
         # Pad or truncate candidates to max_relays
         effective = candidate_ids[:self.max_relays]
-
+        
+        # Action selection (epsilon-greedy)
         if random.random() < self.epsilon:
-            k = min(num_relays, len(effective))
-            return random.sample(effective, k)
+            action_idx = random.randrange(len(effective))
+        else:
+            state_t = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                q_values = self.q_net(state_t).squeeze(0).cpu().numpy()
+            
+            # Mask out non-existent candidates if effective < max_relays
+            q_for_cands = q_values[:len(effective)]
+            action_idx = int(np.argmax(q_for_cands))
 
-        state_t = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            q_values = self.q_net(state_t).squeeze(0).cpu().numpy()
-
-        # Map Q-values to candidates
-        q_for_cands = q_values[:len(effective)]
-        top_indices = np.argsort(q_for_cands)[::-1][:num_relays]
-        return [effective[i] for i in top_indices]
+        # For simplicity, we currently pick 1 primary relay as the 'action'
+        # but we can return a list of top-k if needed by the engine.
+        # Here we return the top 'num_relays' starting with the chosen action_idx.
+        relay_nodes = [effective[action_idx]]
+        
+        return relay_nodes, action_idx
 
     # ------------------------------------------------------------------
     # Learning
